@@ -1,0 +1,126 @@
+package api
+
+import (
+	"GoNews/pkg/storage"
+	"encoding/json"
+	"net/http"
+	"strconv"
+
+	"github.com/gorilla/mux"
+)
+
+type API struct {
+	DB   storage.Interface
+	Rout *mux.Router
+}
+
+const limit = 10 //limit posts on one page
+
+// Создание объекта api
+func New(db storage.Interface) *API {
+	api := API{
+		DB: db,
+	}
+	api.Rout = mux.NewRouter()
+	api.endpoints()
+	return &api
+
+}
+
+type requestIDKey struct{}
+
+// Регистрация обработчиков API.
+func (api *API) endpoints() {
+	api.Rout.HandleFunc("/news", api.newsHandler).Methods(http.MethodGet, http.MethodOptions)
+	api.Rout.HandleFunc("/news/latest", api.newsLatestHandler).Methods(http.MethodGet, http.MethodOptions)
+	api.Rout.HandleFunc("/news/search", api.newsDetailedHandler).Methods(http.MethodGet, http.MethodOptions)
+}
+
+// Получение маршрутизатора запросов.
+// Требуется для передачи маршрутизатора веб-серверу.
+func (api *API) Router() *mux.Router {
+	return api.Rout
+}
+
+func (api *API) newsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	pageParam := r.URL.Query().Get("page")
+	if pageParam == "" {
+		pageParam = "1"
+	}
+
+	sParam := r.URL.Query().Get("s")
+	page, err := strconv.Atoi(pageParam)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	posts, pagination, err := api.DB.PostSearchILIKE(sParam, limit, (page-1)*limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	response := struct {
+		Posts      []storage.Post
+		Pagination storage.Pagination
+	}{
+		Posts:      posts,
+		Pagination: pagination,
+	}
+
+	err = json.NewEncoder(w).Encode(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (api *API) newsLatestHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	pageParam := r.URL.Query().Get("page")
+	if pageParam == "" {
+		pageParam = "1"
+	}
+
+	page, err := strconv.Atoi(pageParam)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	posts, err := api.DB.Posts(limit, (page-1)*limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = json.NewEncoder(w).Encode(posts)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (api *API) newsDetailedHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	idParam := r.URL.Query().Get("id")
+
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	post, err := api.DB.PostDetal(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = json.NewEncoder(w).Encode(post)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}

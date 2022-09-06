@@ -1,0 +1,63 @@
+version: "3.9"
+services:
+  news:
+    build: ./news
+    command: ./news
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db_news
+
+  comments:
+    build: ./comments
+    command: ./comments
+    ports:
+      - "8081:8081"
+    depends_on:
+      - db_comments
+
+  censorship:
+    build: ./censorship
+    command: ./censorship
+    ports:
+      - "8082:8082"
+    depends_on:
+      - db_comments
+
+  gateway:
+    build: ./gateway
+    command: ./gateway
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db_news
+      - db_comments
+      - news
+      - comments
+      - censorship
+
+  db_news:
+    image: postgres:13.3
+    restart: always
+    environment:
+      POSTGRES_DB: "news"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "postgrespw"
+    volumes:
+      - ./news:/docker-entrypoint-initdb.d
+    ports:
+      - "55000:5432"
+
+  db_comments:
+    image: postgres:13.3
+    restart: always
+    environment:
+      POSTGRES_DB: "comments"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "postgrespw"
+    volumes:
+      - ./comments:/docker-entrypoint-initdb.d
+    ports:
+      - "55010:5432"
+
+
